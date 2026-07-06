@@ -2,13 +2,13 @@ import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Readable } from 'stream';
 import { FileStorage, StoredFile } from './file-storage.interface';
 
 @Injectable()
 export class SupabaseFileStorage implements FileStorage {
-  private readonly client: SupabaseClient;
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
   private readonly bucket: string;
   private readonly licenseMaxBytes: number;
   private readonly allowedMime: Set<string>;
@@ -26,9 +26,8 @@ export class SupabaseFileStorage implements FileStorage {
       throw new Error('Supabase storage is not configured');
     }
 
-    this.client = createClient(url, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    this.baseUrl = url.replace(/\/$/, '');
+    this.apiKey = serviceRoleKey;
   }
 
   async saveLicense(file: Express.Multer.File): Promise<StoredFile> {
@@ -43,13 +42,15 @@ export class SupabaseFileStorage implements FileStorage {
     const ext = extname(file.originalname) || this.extFromMime(file.mimetype);
     const objectKey = `licenses/${randomUUID()}${ext}`;
 
-    const { error } = await this.client.storage.from(this.bucket).upload(objectKey, file.buffer, {
-      contentType: file.mimetype,
-      upsert: false,
+    const response = await fetch(this.objectUrl(objectKey), {
+      method: 'POST',
+      headers: this.authHeaders(file.mimetype),
+      body: Uint8Array.from(file.buffer),
     });
 
-    if (error) {
-      throw new Error(`UPLOAD_FAILED: ${error.message}`);
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(`UPLOAD_FAILED: ${message}`);
     }
 
     return {
@@ -60,14 +61,37 @@ export class SupabaseFileStorage implements FileStorage {
   }
 
   async open(relativePath: string): Promise<Readable> {
-    const { data, error } = await this.client.storage.from(this.bucket).download(relativePath);
+    const response = await fetch(this.objectUrl(relativePath), {
+      headers: this.authHeaders(),
+    });
 
-    if (error || !data) {
+    if (!response.ok) {
       throw new Error('FILE_NOT_FOUND');
     }
 
-    const buffer = Buffer.from(await data.arrayBuffer());
+    const buffer = Buffer.from(await response.arrayBuffer());
     return Readable.from(buffer);
+  }
+
+  private objectUrl(objectKey: string): string {
+    const encodedKey = objectKey
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    return `${this.baseUrl}/storage/v1/object/${this.bucket}/${encodedKey}`;
+  }
+
+  private authHeaders(contentType?: string): Record<string, string> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      apikey: this.apiKey,
+    };
+
+    if (contentType) {
+      headers['Content-Type'] = contentType;
+    }
+
+    return headers;
   }
 
   private extFromMime(mime: string): string {
