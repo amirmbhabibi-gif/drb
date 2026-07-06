@@ -21,8 +21,25 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.client.connect();
-    this.logger.log('Redis connection established');
+    await this.connectWithRetry();
+  }
+
+  private async connectWithRetry(attempts = 8): Promise<void> {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        await this.client.connect();
+        this.logger.log('Redis connection established');
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Redis connect attempt ${attempt}/${attempts} failed: ${message}`);
+        if (attempt === attempts) {
+          this.logger.error('Redis unavailable at startup — API will retry on demand');
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

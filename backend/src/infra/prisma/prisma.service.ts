@@ -16,8 +16,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit(): Promise<void> {
-    await this.$connect();
-    this.logger.log('Database connection established');
+    await this.connectWithRetry();
 
     // Log slow queries (>200 ms) in development for performance visibility
     if (process.env.NODE_ENV === 'development') {
@@ -27,6 +26,24 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           this.logger.warn(`Slow query (${e.duration}ms): ${e.query}`);
         }
       });
+    }
+  }
+
+  private async connectWithRetry(attempts = 8): Promise<void> {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        await this.$connect();
+        this.logger.log('Database connection established');
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Database connect attempt ${attempt}/${attempts} failed: ${message}`);
+        if (attempt === attempts) {
+          this.logger.error('Database unavailable at startup — health check will report degraded');
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
     }
   }
 

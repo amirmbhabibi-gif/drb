@@ -20,6 +20,12 @@ export class HealthController {
     private readonly redis: RedisService,
   ) {}
 
+  @Get('live')
+  @ApiOperation({ summary: 'Liveness probe (process is up)' })
+  live(): { status: 'ok'; timestamp: string } {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  }
+
   @Get()
   @ApiOperation({ summary: 'Check service health (DB + Redis)' })
   async check(): Promise<HealthStatus> {

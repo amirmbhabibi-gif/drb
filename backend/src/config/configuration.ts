@@ -3,7 +3,7 @@ import { Env } from './env.validation';
 
 export const appConfig = registerAs('app', () => ({
   nodeEnv: process.env.NODE_ENV as Env['NODE_ENV'],
-  port: Number(process.env.PORT),
+  port: Number(process.env.PORT ?? 3000),
   apiPrefix: process.env.API_PREFIX as string,
   corsOrigin: process.env.CORS_ORIGIN as string,
 }));
