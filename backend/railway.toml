@@ -1,0 +1,8 @@
+[build]
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "npm run start:prod"
+preDeployCommand = ["npm run prisma:migrate:deploy"]
+healthcheckPath = "/api/v1/health"
+restartPolicyType = "ON_FAILURE"

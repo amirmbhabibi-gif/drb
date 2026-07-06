@@ -1,0 +1,9 @@
+[build]
+buildCommand = "npm run build"
+watchPatterns = ["backend/**"]
+
+[deploy]
+startCommand = "npm run start:prod -w darugard-backend"
+preDeployCommand = ["npm run prisma:migrate:deploy -w darugard-backend"]
+healthcheckPath = "/api/v1/health"
+restartPolicyType = "ON_FAILURE"

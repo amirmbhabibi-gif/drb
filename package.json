@@ -1,0 +1,15 @@
+{
+  "name": "drb",
+  "private": true,
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "build": "npm run build -w darugard-backend",
+    "start": "npm run start:prod -w darugard-backend",
+    "start:prod": "npm run start:prod -w darugard-backend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
