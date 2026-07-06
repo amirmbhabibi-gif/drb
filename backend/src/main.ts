@@ -42,28 +42,26 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
 
-  // ── Swagger (non-production) ───────────────────────────────────────────────
-  if (nodeEnv !== 'production') {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('DaruGard API')
-      .setDescription(
-        'B2B pharmaceutical inventory exchange platform. ' +
-          'Phase 1: Marketplace listings (Offer / Need / Swap).',
-      )
-      .setVersion('1.0')
-      .addBearerAuth()
-      .addTag('Listings', 'Inventory exchange listings (core marketplace)')
-      .addTag('Auth', 'Phone OTP authentication and JWT session management')
-      .addTag('Health', 'Service readiness checks')
-      .build();
+  // ── Swagger ────────────────────────────────────────────────────────────────
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('DaruGard API')
+    .setDescription(
+      'B2B pharmaceutical inventory exchange platform. ' +
+        'Phase 1: Marketplace listings (Offer / Need / Swap).',
+    )
+    .setVersion('1.0')
+    .addBearerAuth()
+    .addTag('Listings', 'Inventory exchange listings (core marketplace)')
+    .addTag('Auth', 'Phone OTP authentication and JWT session management')
+    .addTag('Health', 'Service readiness checks')
+    .build();
 
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document, {
-      swaggerOptions: { persistAuthorization: true },
-    });
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('swagger', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
 
-    logger.log(`Swagger UI available at: http://localhost:${port}/docs`);
-  }
+  logger.log(`Swagger UI available at: http://localhost:${port}/swagger`);
 
   // ── Graceful shutdown ──────────────────────────────────────────────────────
   app.enableShutdownHooks();
