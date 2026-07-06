@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Readable } from 'stream';
-import { LocalFileStorage } from '../../../infra/storage/local-file.storage';
+import { FILE_STORAGE, FileStorage } from '../../../infra/storage/file-storage.interface';
 import { UserEntity } from '../../identity/domain/user.entity';
 import { UserRole } from '../../identity/domain/user-role.enum';
 import { UserStatus } from '../../identity/domain/user-status.enum';
@@ -23,7 +23,8 @@ export class PharmacyService {
     private readonly pharmacyRepository: PharmacyRepository,
     @Inject(USER_REPOSITORY)
     private readonly userRepository: UserRepository,
-    private readonly fileStorage: LocalFileStorage,
+    @Inject(FILE_STORAGE)
+    private readonly fileStorage: FileStorage,
   ) {}
 
   async submitLicense(
@@ -50,7 +51,7 @@ export class PharmacyService {
 
     let stored;
     try {
-      stored = this.fileStorage.saveLicense(file);
+      stored = await this.fileStorage.saveLicense(file);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'UPLOAD_FAILED';
       if (message === 'INVALID_FILE_TYPE') {
@@ -124,7 +125,7 @@ export class PharmacyService {
     }
 
     try {
-      const stream = this.fileStorage.open(pharmacy.licenseDocumentPath);
+      const stream = await this.fileStorage.open(pharmacy.licenseDocumentPath);
       return {
         stream,
         mimeType: pharmacy.licenseMimeType ?? 'application/octet-stream',

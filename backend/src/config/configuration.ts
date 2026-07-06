@@ -85,3 +85,11 @@ export const uploadConfig = registerAs('upload', () => ({
     .map((m) => m.trim())
     .filter(Boolean),
 }));
+
+export const storageConfig = registerAs('storage', () => ({
+  driver: (process.env.STORAGE_DRIVER ?? 'local') as 'local' | 'supabase',
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseServiceRoleKey:
+    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY,
+  supabaseBucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'licenses',
+}));

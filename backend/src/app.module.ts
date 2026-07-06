@@ -9,6 +9,7 @@ import {
   otpConfig,
   redisConfig,
   uploadConfig,
+  storageConfig,
 } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './infra/prisma/prisma.module';
@@ -34,6 +35,7 @@ import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
         otpConfig,
         adminConfig,
         uploadConfig,
+        storageConfig,
       ],
       cache: true,
     }),

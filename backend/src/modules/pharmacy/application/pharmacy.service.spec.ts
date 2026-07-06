@@ -4,7 +4,7 @@ import { UserEntity } from '../../identity/domain/user.entity';
 import { UserRole } from '../../identity/domain/user-role.enum';
 import { UserStatus } from '../../identity/domain/user-status.enum';
 import { USER_REPOSITORY, UserRepository } from '../../identity/domain/user.repository';
-import { LocalFileStorage } from '../../../infra/storage/local-file.storage';
+import { FILE_STORAGE, FileStorage } from '../../../infra/storage/file-storage.interface';
 import { PharmacyEntity } from '../domain/pharmacy.entity';
 import { PharmacyVerificationStatus } from '../domain/pharmacy-verification-status.enum';
 import { PHARMACY_REPOSITORY, PharmacyRepository } from '../domain/pharmacy.repository';
@@ -48,7 +48,7 @@ describe('PharmacyService', () => {
   let service: PharmacyService;
   let pharmacyRepository: jest.Mocked<PharmacyRepository>;
   let userRepository: jest.Mocked<UserRepository>;
-  let fileStorage: jest.Mocked<Pick<LocalFileStorage, 'saveLicense' | 'open'>>;
+  let fileStorage: jest.Mocked<Pick<FileStorage, 'saveLicense' | 'open'>>;
 
   const mockFile = {
     originalname: 'license.pdf',
@@ -75,9 +75,8 @@ describe('PharmacyService', () => {
       update: jest.fn(),
     };
     fileStorage = {
-      saveLicense: jest.fn().mockReturnValue({
+      saveLicense: jest.fn().mockResolvedValue({
         relativePath: 'licenses/test.pdf',
-        absolutePath: '/uploads/licenses/test.pdf',
         originalName: 'license.pdf',
         mimeType: 'application/pdf',
       }),
@@ -89,7 +88,7 @@ describe('PharmacyService', () => {
         PharmacyService,
         { provide: PHARMACY_REPOSITORY, useValue: pharmacyRepository },
         { provide: USER_REPOSITORY, useValue: userRepository },
-        { provide: LocalFileStorage, useValue: fileStorage },
+        { provide: FILE_STORAGE, useValue: fileStorage },
       ],
     }).compile();
 

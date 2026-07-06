@@ -1,24 +1,34 @@
-import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'fs';
-import { extname, join } from 'path';
+import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Readable } from 'stream';
 import { FileStorage, StoredFile } from './file-storage.interface';
 
 @Injectable()
-export class LocalFileStorage implements FileStorage {
-  private readonly uploadDir: string;
+export class SupabaseFileStorage implements FileStorage {
+  private readonly client: SupabaseClient;
+  private readonly bucket: string;
   private readonly licenseMaxBytes: number;
   private readonly allowedMime: Set<string>;
 
   constructor(private readonly configService: ConfigService) {
-    this.uploadDir = this.configService.get<string>('upload.dir', './uploads');
+    const url = this.configService.get<string>('storage.supabaseUrl');
+    const serviceRoleKey = this.configService.get<string>('storage.supabaseServiceRoleKey');
+    this.bucket = this.configService.get<string>('storage.supabaseBucket', 'licenses');
     this.licenseMaxBytes =
       this.configService.get<number>('upload.licenseMaxSizeMb', 5) * 1024 * 1024;
     const mimeList = this.configService.get<string[]>('upload.licenseAllowedMime', []);
     this.allowedMime = new Set(mimeList);
-    this.ensureDir(join(this.uploadDir, 'licenses'));
+
+    if (!url || !serviceRoleKey) {
+      throw new Error('Supabase storage is not configured');
+    }
+
+    this.client = createClient(url, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
   }
 
   async saveLicense(file: Express.Multer.File): Promise<StoredFile> {
@@ -31,31 +41,33 @@ export class LocalFileStorage implements FileStorage {
     }
 
     const ext = extname(file.originalname) || this.extFromMime(file.mimetype);
-    const filename = `${randomUUID()}${ext}`;
-    const relativePath = join('licenses', filename);
-    const absolutePath = join(this.uploadDir, relativePath);
+    const objectKey = `licenses/${randomUUID()}${ext}`;
 
-    writeFileSync(absolutePath, file.buffer);
+    const { error } = await this.client.storage.from(this.bucket).upload(objectKey, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    });
+
+    if (error) {
+      throw new Error(`UPLOAD_FAILED: ${error.message}`);
+    }
 
     return {
-      relativePath,
+      relativePath: objectKey,
       originalName: file.originalname,
       mimeType: file.mimetype,
     };
   }
 
   async open(relativePath: string): Promise<Readable> {
-    const absolutePath = join(this.uploadDir, relativePath);
-    if (!existsSync(absolutePath)) {
+    const { data, error } = await this.client.storage.from(this.bucket).download(relativePath);
+
+    if (error || !data) {
       throw new Error('FILE_NOT_FOUND');
     }
-    return createReadStream(absolutePath);
-  }
 
-  private ensureDir(dir: string): void {
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
+    const buffer = Buffer.from(await data.arrayBuffer());
+    return Readable.from(buffer);
   }
 
   private extFromMime(mime: string): string {

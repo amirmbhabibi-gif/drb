@@ -45,6 +45,13 @@ const envSchema = z.object({
   LICENSE_ALLOWED_MIME: z
     .string()
     .default('image/jpeg,image/png,application/pdf'),
+
+  // Object storage (Supabase)
+  STORAGE_DRIVER: z.enum(['local', 'supabase']).default('local'),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  SUPABASE_SECRET_KEY: z.string().min(1).optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().default('licenses'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -57,6 +64,21 @@ export function validateEnv(config: Record<string, unknown>): Env {
       .map((e) => `  [${e.path.join('.')}] ${e.message}`)
       .join('\n');
     throw new Error(`❌ Environment validation failed:\n${formatted}\n`);
+  }
+
+  if (result.data.STORAGE_DRIVER === 'supabase') {
+    const missing: string[] = [];
+    if (!result.data.SUPABASE_URL) {
+      missing.push('SUPABASE_URL');
+    }
+    if (!result.data.SUPABASE_SERVICE_ROLE_KEY && !result.data.SUPABASE_SECRET_KEY) {
+      missing.push('SUPABASE_SECRET_KEY');
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `❌ Environment validation failed:\n  STORAGE_DRIVER=supabase requires: ${missing.join(', ')}\n`,
+      );
+    }
   }
 
   return result.data;
