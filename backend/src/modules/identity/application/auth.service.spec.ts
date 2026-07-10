@@ -41,6 +41,7 @@ describe('AuthService', () => {
       findManyByPharmacy: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      softDelete: jest.fn(),
     };
     pharmacyRepository = {
       findById: jest.fn(),

@@ -1,8 +1,10 @@
-import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PageResult } from '../../../common/dto/pagination.dto';
+import { MEDICATION_REPOSITORY, MedicationRepository } from '../../catalog/domain/medication.repository';
 import { UserStatus } from '../../identity/domain/user-status.enum';
 import { USER_REPOSITORY, UserRepository } from '../../identity/domain/user.repository';
 import { ListingStatus } from '../domain/listing-status.enum';
+import { ListingType } from '../domain/listing-type.enum';
 import { LISTING_REPOSITORY, ListingRepository } from '../domain/listing.repository';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingResponseDto } from './dto/listing.response.dto';
@@ -20,6 +22,8 @@ export class ListingService {
     private readonly listingRepository: ListingRepository,
     @Inject(USER_REPOSITORY)
     private readonly userRepository: UserRepository,
+    @Inject(MEDICATION_REPOSITORY)
+    private readonly medicationRepository: MedicationRepository,
   ) {}
 
   async createListing(dto: CreateListingDto, userId: string): Promise<ListingResponseDto> {
@@ -37,11 +41,31 @@ export class ListingService {
       throw new ForbiddenException('Pharmacy profile required');
     }
 
+    if (dto.type === ListingType.SWAP) {
+      if (!dto.acceptedMedicationIds?.length) {
+        throw new BadRequestException('SWAP listings require at least one accepted medication');
+      }
+    }
+
+    const allMedicationIds = [
+      ...dto.offeredMedicationIds,
+      ...(dto.acceptedMedicationIds ?? []),
+    ];
+    const uniqueMedicationIds = [...new Set(allMedicationIds)];
+    const medications = await this.medicationRepository.findManyByIds(uniqueMedicationIds);
+
+    if (medications.length !== uniqueMedicationIds.length) {
+      throw new BadRequestException('One or more medication IDs are invalid');
+    }
+
     const listing = await this.listingRepository.create({
       pharmacyId: user.pharmacyId,
       type: dto.type,
-      rawText: dto.rawText.trim(),
+      rawText: dto.rawText?.trim() ?? '',
       metadata: (dto.metadata as Record<string, unknown>) ?? {},
+      deliveryMethods: dto.deliveryMethods,
+      offeredMedicationIds: dto.offeredMedicationIds,
+      acceptedMedicationIds: dto.acceptedMedicationIds ?? [],
     });
 
     this.logger.log(

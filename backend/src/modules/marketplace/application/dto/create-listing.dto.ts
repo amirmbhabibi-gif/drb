@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsEnum,
   IsISO8601,
   IsInt,
@@ -11,12 +13,15 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { ListingType } from '../../domain/listing-type.enum';
+import { DeliveryMethod } from '../../domain/delivery-method.enum';
 
 class LocationDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) city?: string;
@@ -79,16 +84,46 @@ export class CreateListingDto {
   type: ListingType = ListingType.OFFER;
 
   @ApiProperty({
-    description:
-      'Free-text description of the drug/item. No structured schema required. ' +
-      'Minimum viable listing; all other fields are optional.',
+    type: [String],
+    description: 'Medication IDs the pharmacy is offering (at least one required)',
+    example: ['550e8400-e29b-41d4-a716-446655440000'],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  offeredMedicationIds: string[] = [];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Medication IDs accepted in exchange (required when type is SWAP)',
+    example: ['550e8400-e29b-41d4-a716-446655440001'],
+  })
+  @ValidateIf((dto: CreateListingDto) => dto.type === ListingType.SWAP)
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  acceptedMedicationIds?: string[];
+
+  @ApiProperty({
+    enum: DeliveryMethod,
+    isArray: true,
+    description: 'Preferred delivery methods for this listing',
+    example: [DeliveryMethod.PICKUP, DeliveryMethod.COURIER],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsEnum(DeliveryMethod, { each: true })
+  deliveryMethods: DeliveryMethod[] = [];
+
+  @ApiPropertyOptional({
+    description: 'Optional free-text notes about the listing',
     example: 'Amoxicillin 500mg capsules, 3 boxes, expiry Jun 2025, good condition',
     maxLength: 2000,
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(2000)
-  rawText: string = '';
+  rawText?: string;
 
   @ApiPropertyOptional({ type: ListingMetadataDto })
   @IsOptional()

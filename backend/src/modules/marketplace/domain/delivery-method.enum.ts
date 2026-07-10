@@ -1,0 +1,6 @@
+export enum DeliveryMethod {
+  PICKUP = 'PICKUP',
+  COURIER = 'COURIER',
+  POST = 'POST',
+  INTERCITY_FREIGHT = 'INTERCITY_FREIGHT',
+}

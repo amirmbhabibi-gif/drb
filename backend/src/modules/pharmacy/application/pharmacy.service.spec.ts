@@ -73,6 +73,7 @@ describe('PharmacyService', () => {
       findManyByPharmacy: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      softDelete: jest.fn(),
     };
     fileStorage = {
       saveLicense: jest.fn().mockResolvedValue({

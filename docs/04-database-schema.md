@@ -20,11 +20,12 @@ Core table. One row per inventory exchange intent.
 ```sql
 CREATE TABLE listings (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    pharmacy_id     UUID NOT NULL,          -- FK to organisations (Phase 2)
+    pharmacy_id     UUID NOT NULL,
     type            listing_type NOT NULL,  -- OFFER | NEED | SWAP
-    raw_text        TEXT NOT NULL,          -- free-text drug description
+    raw_text        TEXT NOT NULL DEFAULT '', -- optional notes (structured meds via join tables)
     metadata        JSONB NOT NULL DEFAULT '{}',
     status          listing_status NOT NULL DEFAULT 'ACTIVE',
+    delivery_methods delivery_method[] NOT NULL DEFAULT '{}',
 
     -- Monetization hooks (reserved, not enforced yet)
     -- boost_score     NUMERIC(5,2),
@@ -39,6 +40,7 @@ CREATE TABLE listings (
 
 CREATE TYPE listing_type   AS ENUM ('OFFER', 'NEED', 'SWAP');
 CREATE TYPE listing_status AS ENUM ('ACTIVE', 'PENDING', 'CLOSED');
+CREATE TYPE delivery_method AS ENUM ('PICKUP', 'COURIER', 'POST', 'INTERCITY_FREIGHT');
 
 -- Indexes
 CREATE INDEX idx_listings_type_status   ON listings (type, status) WHERE deleted_at IS NULL;
@@ -54,9 +56,118 @@ CREATE INDEX idx_listings_deleted_at    ON listings (deleted_at);
 -- CREATE INDEX idx_listings_metadata ON listings USING GIN (metadata);
 ```
 
-**Purpose**: Stores all inventory exchange listings. The `metadata` JSONB column absorbs all semi-structured drug attributes without requiring schema changes.
+**Purpose**: Stores all inventory exchange listings. Structured medications are linked via join tables. The `metadata` JSONB column absorbs semi-structured attributes. `raw_text` holds optional free-form notes.
 
 **Soft delete strategy**: `deleted_at IS NULL` is part of every query's `WHERE` clause. All indexes include this partial filter for efficiency.
+
+---
+
+### `medications`
+
+Master catalog of medications available for selection in listings.
+
+```sql
+CREATE TABLE medications (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(255) NOT NULL,
+    generic_name    VARCHAR(255),
+    form            VARCHAR(100),
+    strength        VARCHAR(100),
+    atc_code        VARCHAR(20),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at      TIMESTAMPTZ
+);
+
+CREATE INDEX idx_medications_name ON medications (name) WHERE deleted_at IS NULL;
+```
+
+**Purpose**: Searchable medication catalog. Seed with sample data; full import later.
+
+---
+
+### `listing_offered_medications`
+
+Join table linking listings to medications the pharmacy is offering.
+
+```sql
+CREATE TABLE listing_offered_medications (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id      UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    medication_id   UUID NOT NULL REFERENCES medications(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (listing_id, medication_id)
+);
+
+CREATE INDEX idx_lom_listing ON listing_offered_medications (listing_id);
+CREATE INDEX idx_lom_medication ON listing_offered_medications (medication_id);
+```
+
+**Invariant**: At least one offered medication per listing (enforced at application layer).
+
+---
+
+### `listing_wanted_medications`
+
+Join table linking listings to medications the pharmacy will accept in exchange.
+
+```sql
+CREATE TABLE listing_wanted_medications (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id      UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    medication_id   UUID NOT NULL REFERENCES medications(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (listing_id, medication_id)
+);
+
+CREATE INDEX idx_lwm_listing ON listing_wanted_medications (listing_id);
+CREATE INDEX idx_lwm_medication ON listing_wanted_medications (medication_id);
+```
+
+**Invariant**: Required for SWAP listings (at least one accepted medication).
+
+---
+
+### `pharmacies` (implemented)
+
+```sql
+CREATE TABLE pharmacies (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                VARCHAR(255) NOT NULL,
+    license_number      VARCHAR(100),
+    verified            BOOLEAN NOT NULL DEFAULT false,
+    verification_status pharmacy_verification_status NOT NULL DEFAULT 'PENDING',
+    license_document_path VARCHAR(500),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at          TIMESTAMPTZ
+);
+
+CREATE TYPE pharmacy_verification_status AS ENUM ('PENDING', 'VERIFIED', 'REJECTED');
+```
+
+---
+
+### `users` (implemented)
+
+```sql
+CREATE TABLE users (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone           VARCHAR(11) NOT NULL UNIQUE,
+    full_name       VARCHAR(255),
+    role            user_role NOT NULL DEFAULT 'OWNER',
+    status          user_status NOT NULL DEFAULT 'PENDING_PROFILE',
+    pharmacy_id     UUID REFERENCES pharmacies(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at      TIMESTAMPTZ
+);
+
+CREATE TYPE user_role AS ENUM ('OWNER', 'MANAGER', 'STAFF', 'ADMIN');
+CREATE TYPE user_status AS ENUM ('PENDING_PROFILE', 'PENDING_VERIFICATION', 'ACTIVE', 'REJECTED', 'SUSPENDED');
+```
+
+**Staff management**: Pharmacy owners create STAFF/MANAGER users linked to their `pharmacy_id`. Staff log in via phone OTP.
 
 ---
 

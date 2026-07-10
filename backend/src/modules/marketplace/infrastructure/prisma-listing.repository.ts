@@ -6,13 +6,23 @@ import { ListingEntity } from '../domain/listing.entity';
 import { parseListingMetadata } from '../domain/listing-metadata.vo';
 import { ListingStatus } from '../domain/listing-status.enum';
 import { ListingType } from '../domain/listing-type.enum';
+import { DeliveryMethod } from '../domain/delivery-method.enum';
+import { MedicationSummary } from '../domain/medication-summary.vo';
 import { ListingQueryFilters, ListingRepository } from '../domain/listing.repository';
+
+const listingInclude = {
+  offeredMedications: {
+    include: { medication: true },
+  },
+  wantedMedications: {
+    include: { medication: true },
+  },
+} as const;
+
+type ListingWithRelations = Prisma.ListingGetPayload<{ include: typeof listingInclude }>;
 
 /**
  * Concrete implementation of the ListingRepository port using Prisma.
- *
- * Infrastructure concerns live here: ORM queries, mapping, soft-delete filters.
- * The domain and application layers see only the abstract ListingRepository port.
  */
 @Injectable()
 export class PrismaListingRepository implements ListingRepository {
@@ -23,6 +33,9 @@ export class PrismaListingRepository implements ListingRepository {
     type: ListingType;
     rawText: string;
     metadata: Record<string, unknown>;
+    deliveryMethods: DeliveryMethod[];
+    offeredMedicationIds: string[];
+    acceptedMedicationIds: string[];
   }): Promise<ListingEntity> {
     const record = await this.prisma.listing.create({
       data: {
@@ -31,14 +44,25 @@ export class PrismaListingRepository implements ListingRepository {
         rawText: data.rawText,
         metadata: data.metadata as Prisma.InputJsonValue,
         status: ListingStatus.ACTIVE as $Enums.ListingStatus,
+        deliveryMethods: data.deliveryMethods as $Enums.DeliveryMethod[],
+        offeredMedications: {
+          create: data.offeredMedicationIds.map((medicationId) => ({ medicationId })),
+        },
+        wantedMedications: {
+          create: data.acceptedMedicationIds.map((medicationId) => ({ medicationId })),
+        },
       },
+      include: listingInclude,
     });
 
     return this.toDomain(record);
   }
 
   async findById(id: string): Promise<ListingEntity | null> {
-    const record = await this.prisma.listing.findUnique({ where: { id } });
+    const record = await this.prisma.listing.findUnique({
+      where: { id },
+      include: listingInclude,
+    });
     return record ? this.toDomain(record) : null;
   }
 
@@ -56,6 +80,7 @@ export class PrismaListingRepository implements ListingRepository {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
+        include: listingInclude,
       }),
       this.prisma.listing.count({ where }),
     ]);
@@ -71,11 +96,9 @@ export class PrismaListingRepository implements ListingRepository {
     });
   }
 
-  // ─── Private helpers ────────────────────────────────────────────────────────
-
   private buildWhereClause(filters: ListingQueryFilters): Prisma.ListingWhereInput {
     const where: Prisma.ListingWhereInput = {
-      deletedAt: null, // always exclude soft-deleted rows
+      deletedAt: null,
     };
 
     if (filters.type) where.type = filters.type;
@@ -85,18 +108,14 @@ export class PrismaListingRepository implements ListingRepository {
     if (filters.q) {
       where.rawText = {
         contains: filters.q,
-        mode: 'insensitive', // ILIKE; Phase 2: migrate to pg_trgm GIN index
+        mode: 'insensitive',
       };
     }
 
     return where;
   }
 
-  /**
-   * Maps a Prisma Listing record to the domain ListingEntity.
-   * Keeps Prisma types strictly inside the infrastructure layer.
-   */
-  private toDomain(record: PrismaListing): ListingEntity {
+  private toDomain(record: ListingWithRelations): ListingEntity {
     return new ListingEntity({
       id: record.id,
       pharmacyId: record.pharmacyId,
@@ -104,9 +123,28 @@ export class PrismaListingRepository implements ListingRepository {
       rawText: record.rawText,
       metadata: parseListingMetadata(record.metadata),
       status: record.status as ListingStatus,
+      deliveryMethods: record.deliveryMethods as DeliveryMethod[],
+      offeredMedications: record.offeredMedications.map((row) => this.toMedicationSummary(row.medication)),
+      wantedMedications: record.wantedMedications.map((row) => this.toMedicationSummary(row.medication)),
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       deletedAt: record.deletedAt,
     });
+  }
+
+  private toMedicationSummary(medication: {
+    id: string;
+    name: string;
+    genericName: string | null;
+    form: string | null;
+    strength: string | null;
+  }): MedicationSummary {
+    return {
+      id: medication.id,
+      name: medication.name,
+      genericName: medication.genericName,
+      form: medication.form,
+      strength: medication.strength,
+    };
   }
 }

@@ -57,7 +57,36 @@ enum PharmacyVerificationStatus {
   REJECTED
 }
 
+/// How a pharmacy prefers to exchange medications.
+enum DeliveryMethod {
+  PICKUP
+  COURIER
+  POST
+  INTERCITY_FREIGHT
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
+
+/// Master catalog of medications available for selection in listings.
+model Medication {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  genericName String?  @map("generic_name") @db.VarChar(255)
+  form        String?  @db.VarChar(100)
+  strength    String?  @db.VarChar(100)
+  atcCode     String?  @map("atc_code") @db.VarChar(20)
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  offeredInListings ListingOfferedMedication[]
+  wantedInListings  ListingWantedMedication[]
+
+  @@index([name])
+  @@index([deletedAt])
+  @@map("medications")
+}
 
 /// Core Phase 1 entity. Represents one side of an inventory exchange intent.
 ///
@@ -74,6 +103,10 @@ model Listing {
   rawText      String        @map("raw_text") @db.Text
   metadata     Json          @default("{}") @db.JsonB
   status       ListingStatus @default(ACTIVE)
+  deliveryMethods DeliveryMethod[] @map("delivery_methods")
+
+  offeredMedications ListingOfferedMedication[]
+  wantedMedications  ListingWantedMedication[]
 
   // ── Monetization hooks (reserved, not implemented in Phase 1) ──────────────
   // boostScore   Decimal?      @map("boost_score") @db.Decimal(5, 2)
@@ -90,6 +123,40 @@ model Listing {
   @@index([status, createdAt(sort: Desc)])
   @@index([deletedAt])
   @@map("listings")
+}
+
+/// Medications the pharmacy is offering in a listing.
+model ListingOfferedMedication {
+  id           String @id @default(uuid()) @db.Uuid
+  listingId    String @map("listing_id") @db.Uuid
+  medicationId String @map("medication_id") @db.Uuid
+
+  listing    Listing    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  medication Medication @relation(fields: [medicationId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([listingId, medicationId])
+  @@index([listingId])
+  @@index([medicationId])
+  @@map("listing_offered_medications")
+}
+
+/// Medications the pharmacy is willing to accept in exchange.
+model ListingWantedMedication {
+  id           String @id @default(uuid()) @db.Uuid
+  listingId    String @map("listing_id") @db.Uuid
+  medicationId String @map("medication_id") @db.Uuid
+
+  listing    Listing    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  medication Medication @relation(fields: [medicationId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([listingId, medicationId])
+  @@index([listingId])
+  @@index([medicationId])
+  @@map("listing_wanted_medications")
 }
 
 /// Pharmacy organisation – owns listings and employs users.

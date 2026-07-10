@@ -21,7 +21,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio",
-    "seed:listings": "ts-node --transpile-only prisma/seed-listings.ts"
+    "seed:listings": "ts-node --transpile-only prisma/seed-listings.ts",
+    "seed:medications": "ts-node --transpile-only prisma/seed-medications.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.1",

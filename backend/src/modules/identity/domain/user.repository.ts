@@ -9,7 +9,13 @@ export abstract class UserRepository {
 
   abstract findManyByPharmacy(pharmacyId: string): Promise<UserEntity[]>;
 
-  abstract create(data: { phone: string; role: UserRole; status: UserStatus }): Promise<UserEntity>;
+  abstract create(data: {
+    phone: string;
+    role: UserRole;
+    status: UserStatus;
+    fullName?: string;
+    pharmacyId?: string;
+  }): Promise<UserEntity>;
 
   abstract update(
     id: string,
@@ -20,6 +26,8 @@ export abstract class UserRepository {
       role?: UserRole;
     },
   ): Promise<UserEntity>;
+
+  abstract softDelete(id: string): Promise<UserEntity>;
 }
 
 export const USER_REPOSITORY = Symbol('USER_REPOSITORY');

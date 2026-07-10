@@ -17,6 +17,7 @@ import { RedisModule } from './infra/redis/redis.module';
 import { StorageModule } from './infra/storage/storage.module';
 import { SmsModule } from './infra/sms/sms.module';
 import { HealthController } from './health/health.controller';
+import { CatalogModule } from './modules/catalog/catalog.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
@@ -43,6 +44,7 @@ import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
     RedisModule,
     StorageModule,
     SmsModule,
+    CatalogModule,
     MarketplaceModule,
     IdentityModule,
     PharmacyModule,

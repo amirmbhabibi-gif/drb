@@ -31,12 +31,20 @@ export class PrismaUserRepository implements UserRepository {
     return records.map((r) => this.toDomain(r));
   }
 
-  async create(data: { phone: string; role: UserRole; status: UserStatus }): Promise<UserEntity> {
+  async create(data: {
+    phone: string;
+    role: UserRole;
+    status: UserStatus;
+    fullName?: string;
+    pharmacyId?: string;
+  }): Promise<UserEntity> {
     const record = await this.prisma.user.create({
       data: {
         phone: data.phone,
         role: data.role as $Enums.UserRole,
         status: data.status as $Enums.UserStatus,
+        fullName: data.fullName,
+        pharmacyId: data.pharmacyId,
       },
     });
     return this.toDomain(record);
@@ -58,6 +66,17 @@ export class PrismaUserRepository implements UserRepository {
         pharmacyId: data.pharmacyId,
         status: data.status as $Enums.UserStatus | undefined,
         role: data.role as $Enums.UserRole | undefined,
+      },
+    });
+    return this.toDomain(record);
+  }
+
+  async softDelete(id: string): Promise<UserEntity> {
+    const record = await this.prisma.user.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        status: UserStatus.SUSPENDED as $Enums.UserStatus,
       },
     });
     return this.toDomain(record);
